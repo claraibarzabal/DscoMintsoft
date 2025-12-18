@@ -1,4 +1,5 @@
 import os
+import base64
 import requests
 from typing import List, Dict, Optional
 from dotenv import load_dotenv
@@ -9,17 +10,24 @@ load_dotenv()
 class DscoProductClient:
     """
     Cliente DSCO – Products API
+    Usa Basic Auth (client_id + client_secret)
     """
 
     BASE_URL = "https://api.dsco.io"
 
     def __init__(self):
-        api_key = os.getenv("DSCO_API_KEY")
-        if not api_key:
-            raise RuntimeError("Missing DSCO_API_KEY")
+        self.client_id = os.getenv("DSCO_CLIENT_ID")
+        self.client_secret = os.getenv("DSCO_CLIENT_SECRET")
+
+        if not self.client_id or not self.client_secret:
+            raise RuntimeError("Missing DSCO_CLIENT_ID or DSCO_CLIENT_SECRET")
+
+        # Basic Auth token
+        token = f"{self.client_id}:{self.client_secret}"
+        encoded = base64.b64encode(token.encode()).decode()
 
         self.headers = {
-            "Authorization": f"Bearer {api_key}",
+            "Authorization": f"Basic {encoded}",
             "Content-Type": "application/json",
             "Accept": "application/json",
         }
@@ -53,10 +61,6 @@ class DscoProductClient:
     ) -> Dict:
         """
         GET /product/page
-
-        Fechas en formato ISO 8601:
-        - createdAtMin / createdAtMax
-        - updatedAtMin / updatedAtMax
         """
 
         params = {
@@ -73,24 +77,16 @@ class DscoProductClient:
         if updated_at_max:
             params["updatedAtMax"] = updated_at_max
 
-        return self._get("/product/page", params=params)
+        return self._get("/item/page", params=params)
 
     # -------------------------------------------------
-    # Products – all (auto pagination)
+    # Products – all
     # -------------------------------------------------
     def get_all_products(
         self,
-        created_at_min: Optional[str] = None,
-        created_at_max: Optional[str] = None,
-        updated_at_min: Optional[str] = None,
-        updated_at_max: Optional[str] = None,
         page_size: int = 100,
         max_pages: int = 200,
     ) -> List[Dict]:
-        """
-        Devuelve TODOS los productos iterando páginas
-        respetando filtros de fecha si se pasan
-        """
 
         products: List[Dict] = []
         page = 0
@@ -99,10 +95,6 @@ class DscoProductClient:
             data = self.get_products_page(
                 page=page,
                 size=page_size,
-                created_at_min=created_at_min,
-                created_at_max=created_at_max,
-                updated_at_min=updated_at_min,
-                updated_at_max=updated_at_max,
             )
 
             items = (
@@ -125,18 +117,21 @@ class DscoProductClient:
 
         return products
 
-    # -------------------------------------------------
-    # Single product (fallback)
-    # -------------------------------------------------
-    def get_product(self, sku: str) -> Optional[Dict]:
-        """
-        Busca un producto por SKU.
+    def get_catalog_item(
+        self,
+        item_code: Optional[str] = None,
+        upc: Optional[str] = None,
+    ) -> Optional[Dict]:
 
-        ⚠️ Fallback costoso: trae todos los productos sin filtros.
-        """
+        params = {}
 
-        for product in self.get_all_products():
-            if product.get("sku") == sku:
-                return product
+        if item_code:
+            params["itemCode"] = item_code
+        elif upc:
+            params["upc"] = upc
+        else:
+            raise ValueError("Must provide itemCode or UPC")
 
-        return None
+        return self._get("/catalog", params=params)
+
+   

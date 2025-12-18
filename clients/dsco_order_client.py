@@ -1,22 +1,58 @@
 import os
+import time
 import requests
 from typing import List, Dict, Optional
+from dotenv import load_dotenv
+
+load_dotenv()
 
 
 class DscoOrderClient:
     """
-    Cliente para DSCO Orders API
+    Cliente para DSCO Orders API (OAuth2)
     """
 
     BASE_URL = "https://api.dsco.io"
+    TOKEN_URL = "https://api.dsco.io/oauth/token"
 
     def __init__(self):
-        api_key = os.getenv("DSCO_API_KEY")
-        if not api_key:
-            raise RuntimeError("Missing DSCO_API_KEY")
+        self.client_id = os.getenv("DSCO_CLIENT_ID")
+        self.client_secret = os.getenv("DSCO_CLIENT_SECRET")
 
-        self.headers = {
-            "Authorization": f"Bearer {api_key}",
+        if not self.client_id or not self.client_secret:
+            raise RuntimeError("Missing DSCO_CLIENT_ID or DSCO_CLIENT_SECRET")
+
+        self._access_token: Optional[str] = None
+        self._token_expiry: float = 0
+
+    # -------------------------------------------------
+    # OAuth
+    # -------------------------------------------------
+    def _get_access_token(self) -> str:
+        if self._access_token and time.time() < self._token_expiry:
+            return self._access_token
+
+        response = requests.post(
+            self.TOKEN_URL,
+            data={
+                "grant_type": "client_credentials",
+                "client_id": self.client_id,
+                "client_secret": self.client_secret,
+            },
+            timeout=30,
+        )
+
+        response.raise_for_status()
+        data = response.json()
+
+        self._access_token = data["access_token"]
+        self._token_expiry = time.time() + data.get("expires_in", 3600) - 60
+
+        return self._access_token
+
+    def _headers(self) -> Dict[str, str]:
+        return {
+            "Authorization": f"Bearer {self._get_access_token()}",
             "Content-Type": "application/json",
             "Accept": "application/json",
         }
@@ -29,9 +65,9 @@ class DscoOrderClient:
 
         r = requests.get(
             url,
-            headers=self.headers,
+            headers=self._headers(),
             params=params,
-            timeout=30
+            timeout=30,
         )
         r.raise_for_status()
         return r.json()
@@ -49,7 +85,7 @@ class DscoOrderClient:
     ) -> Dict:
         """
         GET /order/page
-        Filtros de fecha en ISO 8601
+        updated_from / updated_to en ISO 8601
         """
 
         params = {
@@ -69,7 +105,7 @@ class DscoOrderClient:
         return self._get("/order/page", params=params)
 
     # -------------------------------------------------
-    # Orders – all (auto pagination)
+    # Orders – all
     # -------------------------------------------------
     def get_orders(
         self,
@@ -79,12 +115,8 @@ class DscoOrderClient:
         page_size: int = 50,
         max_pages: int = 100,
     ) -> List[Dict]:
-        """
-        Devuelve TODAS las órdenes iterando páginas
-        (respetando filtros si se pasan)
-        """
 
-        all_orders: List[Dict] = []
+        orders: List[Dict] = []
         page = 0
 
         while page < max_pages:
@@ -106,7 +138,7 @@ class DscoOrderClient:
             if not items:
                 break
 
-            all_orders.extend(items)
+            orders.extend(items)
 
             total_pages = data.get("totalPages")
             if total_pages is not None and page >= total_pages - 1:
@@ -114,16 +146,14 @@ class DscoOrderClient:
 
             page += 1
 
-        return all_orders
+        return orders
 
     # -------------------------------------------------
     # Single order
     # -------------------------------------------------
     def get_order(self, order_number: str) -> Optional[Dict]:
         """
-        Busca una orden puntual por orderNumber
-
-        ⚠️ Fallback sin filtros de fecha ni status
+        GET /order/{orderNumber}
         """
 
         try:
@@ -131,10 +161,4 @@ class DscoOrderClient:
         except requests.HTTPError as e:
             if e.response.status_code != 404:
                 raise
-
-        # Fallback: búsqueda completa
-        for order in self.get_orders():
-            if order.get("orderNumber") == order_number:
-                return order
-
         return None
