@@ -1,7 +1,6 @@
 import os
-import base64
 import requests
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Union
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -9,11 +8,12 @@ load_dotenv()
 
 class DscoProductClient:
     """
-    Cliente DSCO – Products API
-    Usa Basic Auth (client_id + client_secret)
+    Cliente DSCO – Catalog / Products API
+    Autenticación OAuth2 (client_credentials)
     """
 
     BASE_URL = "https://api.dsco.io"
+    AUTH_URL = "https://auth.dsco.io/oauth/token"
 
     def __init__(self):
         self.client_id = os.getenv("DSCO_CLIENT_ID")
@@ -22,18 +22,39 @@ class DscoProductClient:
         if not self.client_id or not self.client_secret:
             raise RuntimeError("Missing DSCO_CLIENT_ID or DSCO_CLIENT_SECRET")
 
-        # Basic Auth token
-        token = f"{self.client_id}:{self.client_secret}"
-        encoded = base64.b64encode(token.encode()).decode()
+        self._access_token: Optional[str] = None
+        self.headers = self._build_headers()
 
-        self.headers = {
-            "Authorization": f"Basic {encoded}",
+    # -------------------------------------------------
+    # OAuth
+    # -------------------------------------------------
+    def _get_oauth_token(self) -> str:
+        """Obtiene access_token usando client_credentials"""
+
+        if self._access_token:
+            return self._access_token
+
+        r = requests.post(
+            self.AUTH_URL,
+            auth=(self.client_id, self.client_secret),
+            data={"grant_type": "client_credentials"},
+            timeout=30,
+        )
+        r.raise_for_status()
+
+        self._access_token = r.json()["access_token"]
+        return self._access_token
+
+    def _build_headers(self) -> Dict[str, str]:
+        token = self._get_oauth_token()
+        return {
+            "Authorization": f"Bearer {token}",
             "Content-Type": "application/json",
             "Accept": "application/json",
         }
 
     # -------------------------------------------------
-    # Low level request
+    # Low level requests
     # -------------------------------------------------
     def _get(self, path: str, params: Optional[Dict] = None) -> Dict:
         url = f"{self.BASE_URL}{path}"
@@ -42,96 +63,66 @@ class DscoProductClient:
             url,
             headers=self.headers,
             params=params,
-            timeout=30
+            timeout=30,
+        )
+        r.raise_for_status()
+        return r.json()
+
+    def _post(self, path: str, payload: Union[Dict, List[Dict]]) -> Dict:
+        url = f"{self.BASE_URL}{path}"
+
+        r = requests.post(
+            url,
+            headers=self.headers,
+            json=payload,
+            timeout=60,
         )
         r.raise_for_status()
         return r.json()
 
     # -------------------------------------------------
-    # Products – paginated
+    # Catalog – single item lookup
     # -------------------------------------------------
-    def get_products_page(
-        self,
-        page: int = 0,
-        size: int = 100,
-        created_at_min: Optional[str] = None,
-        created_at_max: Optional[str] = None,
-        updated_at_min: Optional[str] = None,
-        updated_at_max: Optional[str] = None,
-    ) -> Dict:
-        """
-        GET /product/page
-        """
-
-        params = {
-            "page": page,
-            "size": size,
-        }
-
-        if created_at_min:
-            params["createdAtMin"] = created_at_min
-        if created_at_max:
-            params["createdAtMax"] = created_at_max
-        if updated_at_min:
-            params["updatedAtMin"] = updated_at_min
-        if updated_at_max:
-            params["updatedAtMax"] = updated_at_max
-
-        return self._get("/item/page", params=params)
-
-    # -------------------------------------------------
-    # Products – all
-    # -------------------------------------------------
-    def get_all_products(
-        self,
-        page_size: int = 100,
-        max_pages: int = 200,
-    ) -> List[Dict]:
-
-        products: List[Dict] = []
-        page = 0
-
-        while page < max_pages:
-            data = self.get_products_page(
-                page=page,
-                size=page_size,
-            )
-
-            items = (
-                data.get("content")
-                or data.get("items")
-                or data.get("products")
-                or []
-            )
-
-            if not items:
-                break
-
-            products.extend(items)
-
-            total_pages = data.get("totalPages")
-            if total_pages is not None and page >= total_pages - 1:
-                break
-
-            page += 1
-
-        return products
-
     def get_catalog_item(
         self,
-        item_code: Optional[str] = None,
-        upc: Optional[str] = None,
-    ) -> Optional[Dict]:
+        *,
+        item_key: str,
+        value: str,
+        dsco_retailer_id: Optional[str] = None,
+        dsco_trading_partner_id: Optional[str] = None,
+        return_multiple: bool = False,
+    ) -> Dict:
+        """
+        GET /catalog
+        item_key: dscoItemId | sku | partnerSku | upc | ean | mpn | isbn | gtin
+        """
 
-        params = {}
+        params: Dict[str, Union[str, bool]] = {
+            "itemKey": item_key,
+            "value": value,
+        }
 
-        if item_code:
-            params["itemCode"] = item_code
-        elif upc:
-            params["upc"] = upc
-        else:
-            raise ValueError("Must provide itemCode or UPC")
+        if return_multiple:
+            params["returnMultiple"] = True
+
+        if dsco_retailer_id:
+            params["dscoRetailerId"] = dsco_retailer_id
+
+        if dsco_trading_partner_id:
+            params["dscoTradingPartnerId"] = dsco_trading_partner_id
 
         return self._get("/catalog", params=params)
 
-   
+    # -------------------------------------------------
+    # Catalog – update small batch
+    # -------------------------------------------------
+    def update_catalog_small_batch(self, items: List[Dict]) -> Dict:
+        """
+        POST /catalog/batch/small
+        items debe ser una lista de objetos ItemCatalog
+        """
+
+        if not isinstance(items, list) or not items:
+            raise ValueError("items must be a non-empty list")
+
+        return self._post("/catalog/batch/small", items)

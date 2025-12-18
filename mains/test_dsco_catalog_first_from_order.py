@@ -1,56 +1,128 @@
+import os
+import requests
+from typing import List, Dict, Optional, Union
 from dotenv import load_dotenv
-import json
 
-from clients.dsco_order_client import DscoOrderClient
-from clients.dsco_product_client import DscoProductClient
-from loggers.product_logger import get_product_logger
+load_dotenv()
 
 
-def main():
-    load_dotenv()
+class DscoProductClient:
+    """
+    Cliente DSCO – Catalog / Products API
+    Autenticación OAuth2 (client_credentials)
+    """
 
-    logger = get_product_logger()
-    logger.info("===== DSCO CATALOG TEST FROM ORDER START =====")
+    BASE_URL = "https://api.dsco.io"
+    AUTH_URL = "https://auth.dsco.io/oauth/token"
 
-    order_client = DscoOrderClient()
-    product_client = DscoProductClient()
+    def __init__(self):
+        self.client_id = os.getenv("DSCO_CLIENT_ID")
+        self.client_secret = os.getenv("DSCO_CLIENT_SECRET")
 
-    # 🔹 Traemos 1 order
-    orders_page = order_client.get_orders_page(page=0, size=1)
+        if not self.client_id or not self.client_secret:
+            raise RuntimeError("Missing DSCO_CLIENT_ID or DSCO_CLIENT_SECRET")
 
-    orders = (
-        orders_page.get("content")
-        or orders_page.get("items")
-        or orders_page.get("orders")
-        or []
-    )
+        self._access_token: Optional[str] = None
+        self.headers = self._build_headers()
 
-    if not orders:
-        logger.warning("No orders found")
-        return
+    # -------------------------------------------------
+    # OAuth
+    # -------------------------------------------------
+    def _get_oauth_token(self) -> str:
+        """Obtiene access_token usando client_credentials"""
 
-    order = orders[0]
+        if self._access_token:
+            return self._access_token
 
-    lines = order.get("orderLines") or order.get("lines") or []
-    if not lines:
-        logger.warning("Order has no lines")
-        return
+        r = requests.post(
+            self.AUTH_URL,
+            auth=(self.client_id, self.client_secret),
+            data={"grant_type": "client_credentials"},
+            timeout=30,
+        )
+        r.raise_for_status()
 
-    item_code = lines[0].get("itemCode")
-    if not item_code:
-        logger.warning("Order line has no itemCode")
-        return
+        self._access_token = r.json()["access_token"]
+        return self._access_token
 
-    logger.info(f"Using itemCode from order: {item_code}")
+    def _build_headers(self) -> Dict[str, str]:
+        token = self._get_oauth_token()
+        return {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+        }
 
-    # 🔹 Llamada REAL a /catalog
-    product = product_client.get_catalog_item(item_code=item_code)
+    # -------------------------------------------------
+    # Low level requests
+    # -------------------------------------------------
+    def _get(self, path: str, params: Optional[Dict] = None) -> Dict:
+        url = f"{self.BASE_URL}{path}"
 
-    logger.info("Catalog product fetched:")
-    logger.info(json.dumps(product, indent=2))
+        r = requests.get(
+            url,
+            headers=self.headers,
+            params=params,
+            timeout=30,
+        )
+        r.raise_for_status()
+        return r.json()
 
-    logger.info("===== DSCO CATALOG TEST FROM ORDER END =====")
+    def _post(self, path: str, payload: Union[Dict, List[Dict]]) -> Dict:
+        url = f"{self.BASE_URL}{path}"
 
+        r = requests.post(
+            url,
+            headers=self.headers,
+            json=payload,
+            timeout=60,
+        )
+        r.raise_for_status()
+        return r.json()
 
-if __name__ == "__main__":
-    main()
+    # -------------------------------------------------
+    # Catalog – single item lookup
+    # -------------------------------------------------
+    def get_catalog_item(
+        self,
+        *,
+        item_key: str,
+        value: str,
+        dsco_retailer_id: Optional[str] = None,
+        dsco_trading_partner_id: Optional[str] = None,
+        return_multiple: bool = False,
+    ) -> Dict:
+        """
+        GET /catalog
+        item_key: dscoItemId | sku | partnerSku | upc | ean | mpn | isbn | gtin
+        """
+
+        params: Dict[str, Union[str, bool]] = {
+            "itemKey": item_key,
+            "value": value,
+        }
+
+        if return_multiple:
+            params["returnMultiple"] = True
+
+        if dsco_retailer_id:
+            params["dscoRetailerId"] = dsco_retailer_id
+
+        if dsco_trading_partner_id:
+            params["dscoTradingPartnerId"] = dsco_trading_partner_id
+
+        return self._get("/catalog", params=params)
+
+    # -------------------------------------------------
+    # Catalog – update small batch
+    # -------------------------------------------------
+    def update_catalog_small_batch(self, items: List[Dict]) -> Dict:
+        """
+        POST /catalog/batch/small
+        items debe ser una lista de objetos ItemCatalog
+        """
+
+        if not isinstance(items, list) or not items:
+            raise ValueError("items must be a non-empty list")
+
+        return self._post("/catalog/batch/small", items)
