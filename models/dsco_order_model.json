@@ -1,0 +1,71 @@
+{
+  "orderNumber": "string",
+  "externalOrderReference": "string | null",
+  "orderStatus": "string",
+  "orderType": "string",
+
+  "orderDate": "string (ISO 8601)",
+  "shipByDate": "string (ISO 8601) | null",
+  "deliverByDate": "string (ISO 8601) | null",
+
+  "channel": "string",
+  "client": "string",
+
+  "shippingMethod": "string | null",
+  "carrier": "string | null",
+  "serviceLevel": "string | null",
+
+  "warehouse": {
+    "warehouseCode": "string",
+    "warehouseName": "string | null"
+  },
+
+  "shipTo": {
+    "company": "string | null",
+    "firstName": "string",
+    "lastName": "string",
+    "address1": "string",
+    "address2": "string | null",
+    "address3": "string | null",
+    "city": "string",
+    "state": "string | null",
+    "postalCode": "string",
+    "country": "string",
+    "email": "string | null",
+    "phone": "string | null"
+  },
+
+  "billTo": {
+    "company": "string | null",
+    "firstName": "string | null",
+    "lastName": "string | null",
+    "address1": "string | null",
+    "address2": "string | null",
+    "city": "string | null",
+    "state": "string | null",
+    "postalCode": "string | null",
+    "country": "string | null",
+    "email": "string | null"
+  },
+
+  "orderLines": [
+    {
+      "lineNumber": "number",
+      "sku": "string",
+      "description": "string | null",
+      "quantity": "number",
+      "unitPrice": "number | null",
+      "currency": "string | null",
+      "warehouseCode": "string | null"
+    }
+  ],
+
+  "totals": {
+    "orderValue": "number | null",
+    "shipping": "number | null",
+    "tax": "number | null",
+    "discount": "number | null"
+  },
+
+  "tags": "string[] | null"
+}

@@ -1,0 +1,21 @@
+# Virtual environment
+venv/
+.env
+
+# Python
+__pycache__/
+*.pyc
+
+# Logs
+logs/
+*.log
+
+# OS
+.DS_Store
+
+# VS Code
+.vscode/
+
+# pytest / coverage
+.coverage
+htmlcov/

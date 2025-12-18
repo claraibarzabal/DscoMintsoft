@@ -1,0 +1,47 @@
+{
+  "SKU": "string",
+  "ProductName": "string",
+  "Description": "string",
+  "Barcode": "string",
+
+  "ProductType": "Stock", 
+  "ProductStatus": "Active",
+
+  "UnitPrice": 0,
+  "UnitPriceVat": 0,
+  "CostPrice": 0,
+
+  "Weight": 0,
+  "Height": 0,
+  "Width": 0,
+  "Depth": 0,
+
+  "CountryOfOrigin": "string",
+  "HSCode": "string",
+
+  "TrackInventory": true,
+  "BatchTracking": false,
+  "SerialTracking": false,
+  "BBETracking": false,
+
+  "ReorderLevel": 0,
+  "ReorderQuantity": 0,
+
+  "WarehouseId": 0,
+  "Warehouse": "string",
+
+  "ProductNameValues": [
+    {
+      "Name": "Color",
+      "Value": "Black"
+    },
+    {
+      "Name": "Size",
+      "Value": "M"
+    }
+  ],
+
+  "Tags": "string",
+
+  "ClientId": 0
+}

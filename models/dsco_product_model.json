@@ -1,0 +1,58 @@
+{
+  "productId": "string",
+  "sku": "string",
+  "externalSku": "string | null",
+
+  "productName": "string",
+  "description": "string | null",
+
+  "status": "string",
+  "productType": "string",
+
+  "client": "string",
+  "brand": "string | null",
+  "category": "string | null",
+
+  "barcode": "string | null",
+
+  "dimensions": {
+    "weight": "number | null",
+    "length": "number | null",
+    "width": "number | null",
+    "height": "number | null",
+    "weightUnit": "string | null",
+    "dimensionUnit": "string | null"
+  },
+
+  "pricing": {
+    "cost": "number | null",
+    "price": "number | null",
+    "currency": "string | null"
+  },
+
+  "inventory": {
+    "trackingType": "string",
+    "batchTracking": "boolean",
+    "serialTracking": "boolean"
+  },
+
+  "warehouseData": [
+    {
+      "warehouseCode": "string",
+      "warehouseName": "string | null",
+      "stockOnHand": "number",
+      "stockAllocated": "number",
+      "stockAvailable": "number"
+    }
+  ],
+
+  "customAttributes": [
+    {
+      "name": "string",
+      "value": "string"
+    }
+  ],
+
+  "createdAt": "string (ISO 8601)",
+  "updatedAt": "string (ISO 8601)"
+}
