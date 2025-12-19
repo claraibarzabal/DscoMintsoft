@@ -58,14 +58,23 @@ class DscoOrderClient:
 
         return self._access_token
 
-
-
     def _headers(self) -> Dict[str, str]:
+        token = self._get_access_token()
+        print(f"Access token: {repr(token)}")  # <-- Aquí verificás el token
         return {
-            "Authorization": f"Bearer {self._get_access_token()}",
+            "Authorization": f"Bearer {token}",
             "Accept": "application/json",
             "Content-Type": "application/json",
         }
+
+
+    
+    #def _headers(self) -> Dict[str, str]:
+    #    return {
+    #        "Authorization": f"Bearer {self._get_access_token()}",
+    #        "Accept": "application/json",
+    #        "Content-Type": "application/json",
+    #    }
 
     # -------------------------------------------------
     # Low level request
@@ -116,32 +125,39 @@ class DscoOrderClient:
     def get_orders_page(
         self,
         *,
+        orders_created_since: str,
+        until: str,
         limit: int = 100,
         scroll_id: Optional[str] = None,
-        ordersCreatedSince: Optional[str] = None,
-        until: Optional[str] = None,
     ) -> Dict:
+        """
+        Trae una página de órdenes usando POST con JSON.
+        Parámetros:
+        - orders_created_since: fecha ISO 8601 desde la que traer órdenes
+        - until: fecha ISO 8601 hasta la que traer órdenes
+        - limit: cantidad de órdenes a traer
+        - scroll_id: para paginación si es necesario
+        """
         payload = {}
-
         if scroll_id:
             payload["scrollId"] = scroll_id
         else:
-            payload["limit"] = limit
-            if not ordersCreatedSince and not until:
-                raise ValueError("Must provide ordersCreatedSince and/or until")
-            if ordersCreatedSince:
-                payload["ordersCreatedSince"] = ordersCreatedSince
-            if until:
-                payload["until"] = until
+            payload = {
+                "ordersCreatedSince": orders_created_since,
+                "until": until,
+                "limit": limit
+            }
 
         r = requests.post(
             url=f"{self.BASE_URL}/order/page",
             headers=self._headers(),
-            json=payload,
-            timeout=30,
+            json=payload,  # body JSON, no query string
+            timeout=30
         )
+
         r.raise_for_status()
         return r.json()
+
 
  #   def get_orders_page(
  #       self,

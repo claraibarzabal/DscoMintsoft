@@ -9,6 +9,7 @@ sys.path.insert(0, ROOT)
 
 from clients.dsco_order_client import DscoOrderClient
 from loggers.product_logger import get_product_logger
+import requests
 
 def main():
     load_dotenv()
@@ -34,13 +35,16 @@ def main():
         # -------------------------------------------------
         # Traer 5 órdenes usando retailerCreateDate
         # -------------------------------------------------
-        orders_page = order_client.get_orders_page(
-            limit=5,
-            ordersCreatedSince=orders_created_since,
-            until=until
-        )
-
-        orders = orders_page.get("orders", [])
+        try:
+            orders_page = order_client.get_orders_page(
+                orders_created_since=orders_created_since,
+                until=until,
+                limit=5,
+            )
+            orders = orders_page.get("orders", [])
+        except requests.exceptions.HTTPError as e:
+            logger.error(f"HTTP error: {e.response.status_code} {e.response.text}")
+            return
 
         if not orders:
             logger.warning("No orders found")
