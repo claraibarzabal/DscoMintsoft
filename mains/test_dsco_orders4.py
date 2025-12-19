@@ -23,12 +23,12 @@ def main():
     # -------------------------------------------------
     today = datetime.now(timezone.utc)
     start_of_week = today - timedelta(days=today.weekday())  # lunes
-    end_of_week = start_of_week + timedelta(days=7)  # domingo
+    end_of_week = today  # hasta ahora
 
-    retailer_create_since = start_of_week.strftime("%Y-%m-%dT%H:%M:%SZ")
-    retailer_create_until = end_of_week.strftime("%Y-%m-%dT%H:%M:%SZ")
+    orders_created_since = start_of_week.strftime("%Y-%m-%dT%H:%M:%SZ")
+    until = (end_of_week - timedelta(seconds=5)).strftime("%Y-%m-%dT%H:%M:%SZ")  # al menos 5 seg en el pasado
 
-    logger.info(f"Fetching orders with retailerCreateDate between {retailer_create_since} and {retailer_create_until}")
+    logger.info(f"Fetching orders between {orders_created_since} and {until}")
 
     try:
         # -------------------------------------------------
@@ -36,10 +36,8 @@ def main():
         # -------------------------------------------------
         orders_page = order_client.get_orders_page(
             limit=5,
-            retailerCreateDate={
-                "from": retailer_create_since,
-                "to": retailer_create_until
-            }
+            ordersCreatedSince=orders_created_since,
+            until=until
         )
 
         orders = orders_page.get("orders", [])

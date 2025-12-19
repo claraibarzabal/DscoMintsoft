@@ -118,15 +118,21 @@ class DscoOrderClient:
         *,
         limit: int = 100,
         scroll_id: Optional[str] = None,
-        retailerCreateDate: Optional[Dict[str, str]] = None,
+        ordersCreatedSince: Optional[str] = None,
+        until: Optional[str] = None,
     ) -> Dict:
         payload = {}
+
         if scroll_id:
             payload["scrollId"] = scroll_id
         else:
             payload["limit"] = limit
-            if retailerCreateDate:
-                payload["retailerCreateDate"] = retailerCreateDate
+            if not ordersCreatedSince and not until:
+                raise ValueError("Must provide ordersCreatedSince and/or until")
+            if ordersCreatedSince:
+                payload["ordersCreatedSince"] = ordersCreatedSince
+            if until:
+                payload["until"] = until
 
         r = requests.post(
             url=f"{self.BASE_URL}/order/page",
