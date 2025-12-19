@@ -1,5 +1,10 @@
 from dotenv import load_dotenv
 import json
+import os 
+import sys
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, ROOT)
 
 from clients.dsco_product_client import DscoProductClient
 from loggers.product_logger import get_product_logger
@@ -12,11 +17,15 @@ def main():
 
     client = DscoProductClient()
 
-    # 🔹 Traer 1 página solamente
-    page_data = client.get_products_page(
-        page=0,
-        size=5
+    page_data = client._get(
+        "/catalog",
+        params={
+            "itemKey": "dscoItemId",
+            "value": "1298680805"
+        }
     )
+
+
 
     products = (
         page_data.get("content")

@@ -25,14 +25,11 @@ class DscoProductClient:
             raise RuntimeError("Missing DSCO_CLIENT_ID or DSCO_CLIENT_SECRET")
 
         self._access_token: Optional[str] = None
-        self._token_expiry: float = 0
 
     # -------------------------------------------------
     # OAuth
     # -------------------------------------------------
     def _get_oauth_token(self) -> str:
-        if self._access_token and time.time() < self._token_expiry:
-            return self._access_token
 
         r = requests.post(
             self.TOKEN_URL,
@@ -47,13 +44,12 @@ class DscoProductClient:
 
         data = r.json()
         self._access_token = data["access_token"]
-        self._token_expiry = time.time() + data.get("expires_in", 3600) - 60
 
         return self._access_token
 
     def _headers(self) -> Dict[str, str]:
         return {
-            "Authorization": f"Bearer {self._get_oauth_token()}",
+            "Authorization": f"bearer {self._get_oauth_token()}",
             "Content-Type": "application/json",
             "Accept": "application/json",
         }
@@ -71,6 +67,7 @@ class DscoProductClient:
             timeout=30,
         )
         r.raise_for_status()
+        print(r.json())
         return r.json()
 
     def _post(self, path: str, payload: Union[Dict, List[Dict]]) -> Dict:
