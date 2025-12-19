@@ -116,29 +116,53 @@ class DscoOrderClient:
     def get_orders_page(
         self,
         *,
-        updated_since: str,
-        updated_until: str,
         limit: int = 100,
         scroll_id: Optional[str] = None,
+        retailerCreateDate: Optional[Dict[str, str]] = None,
     ) -> Dict:
         payload = {}
         if scroll_id:
             payload["scrollId"] = scroll_id
         else:
-            payload = {
-                "updatedSince": updated_since,
-                "updatedUntil": updated_until,
-                "limit": limit,
-            }
+            payload["limit"] = limit
+            if retailerCreateDate:
+                payload["retailerCreateDate"] = retailerCreateDate
 
         r = requests.post(
             url=f"{self.BASE_URL}/order/page",
             headers=self._headers(),
-            json=payload,  # ⚠️ body JSON, no query string
+            json=payload,
             timeout=30,
         )
         r.raise_for_status()
         return r.json()
+
+ #   def get_orders_page(
+ #       self,
+ #       *,
+ #       updated_since: str,
+ #       updated_until: str,
+ #       limit: int = 100,
+ #       scroll_id: Optional[str] = None,
+  #  ) -> Dict:
+  #      payload = {}
+ #       if scroll_id:
+ #           payload["scrollId"] = scroll_id
+ #       else:
+ #           payload = {
+ #               "updatedSince": updated_since,
+ #               "updatedUntil": updated_until,
+ #               "limit": limit,
+ #           }
+
+ #       r = requests.post(
+ #           url=f"{self.BASE_URL}/order/page",
+ #           headers=self._headers(),
+ #           json=payload,  # ⚠️ body JSON, no query string
+ #           timeout=30,
+ #       )
+ #       r.raise_for_status()
+ #       return r.json()
 
         # params = {}
        
