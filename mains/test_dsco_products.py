@@ -25,8 +25,6 @@ def main():
         }
     )
 
-
-
     products = (
         page_data.get("content")
         or page_data.get("items")
