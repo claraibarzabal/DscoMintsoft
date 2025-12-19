@@ -116,24 +116,41 @@ class DscoOrderClient:
     def get_orders_page(
         self,
         *,
-        orders_updated_since: str = None,
-        until: str = None,
-        orders_per_page: int = 100,
+        updated_since: str,
+        updated_until: str,
+        limit: int = 100,
         scroll_id: Optional[str] = None,
     ) -> Dict:
-        params = {}
-
+        payload = {}
         if scroll_id:
-            params["scrollId"] = scroll_id
+            payload["scrollId"] = scroll_id
         else:
-            if not orders_updated_since or not until:
-                raise ValueError("Must provide orders_updated_since and until for first page")
+            payload = {
+                "updatedSince": updated_since,
+                "updatedUntil": updated_until,
+                "limit": limit,
+            }
 
-            params["ordersUpdatedSince"] = orders_updated_since
-            params["until"] = until
-            params["ordersPerPage"] = orders_per_page
+        r = requests.post(
+            url=f"{self.BASE_URL}/order/page",
+            headers=self._headers(),
+            json=payload,  # ⚠️ body JSON, no query string
+            timeout=30,
+        )
+        r.raise_for_status()
+        return r.json()
 
-        return self._get("/order/page", params)
+        # params = {}
+       
+        # if scroll_id:
+        #    params["scrollId"] = scroll_id
+        # else:
+        #   params["updatedSince"] = updated_since
+        #    params["updatedUntil"] = updated_until
+        #    params["limit"] = limit
+
+        #return self._get("/order/page", params)
+
 
     # -------------------------------------------------
     # Orders – all (auto scroll)

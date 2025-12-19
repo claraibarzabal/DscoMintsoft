@@ -21,20 +21,21 @@ def main():
     # -------------------------------------------------
 
     orders_updated_since = "2024-01-01T00:00:00Z"
-    until = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    until = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
     # -------------------------------------------------
     # 1️⃣ Traer UNA orden
     # -------------------------------------------------
     orders_updated_since = "2024-01-01T00:00:00Z"
-    until = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    until = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
     orders_page = order_client.get_orders_page(
-        orders_updated_since=orders_updated_since,
-        until=until,
-        orders_per_page=1,
+        updated_since=orders_updated_since,
+        updated_until=until,
+        limit=1,
     )
+
 
     logger.debug("Raw orders_page response:")
     logger.debug(json.dumps(orders_page, indent=2))
