@@ -1,4 +1,5 @@
 import os
+import time
 import requests
 from typing import List, Dict, Optional, Union
 from dotenv import load_dotenv
@@ -13,7 +14,7 @@ class DscoProductClient:
     """
 
     BASE_URL = "https://api.dsco.io"
-    AUTH_URL = "https://auth.dsco.io/oauth/token"
+    TOKEN_URL = "https://api.dsco.io/oauth/token"
 
     def __init__(self):
         self.client_id = os.getenv("DSCO_CLIENT_ID")
@@ -23,32 +24,35 @@ class DscoProductClient:
             raise RuntimeError("Missing DSCO_CLIENT_ID or DSCO_CLIENT_SECRET")
 
         self._access_token: Optional[str] = None
-        self.headers = self._build_headers()
+        self._token_expiry: float = 0
 
     # -------------------------------------------------
     # OAuth
     # -------------------------------------------------
     def _get_oauth_token(self) -> str:
-        """Obtiene access_token usando client_credentials"""
-
-        if self._access_token:
+        if self._access_token and time.time() < self._token_expiry:
             return self._access_token
 
         r = requests.post(
-            self.AUTH_URL,
-            auth=(self.client_id, self.client_secret),
-            data={"grant_type": "client_credentials"},
+            self.TOKEN_URL,
+            data={
+                "grant_type": "client_credentials",
+                "client_id": self.client_id,
+                "client_secret": self.client_secret,
+            },
             timeout=30,
         )
         r.raise_for_status()
 
-        self._access_token = r.json()["access_token"]
+        data = r.json()
+        self._access_token = data["access_token"]
+        self._token_expiry = time.time() + data.get("expires_in", 3600) - 60
+
         return self._access_token
 
-    def _build_headers(self) -> Dict[str, str]:
-        token = self._get_oauth_token()
+    def _headers(self) -> Dict[str, str]:
         return {
-            "Authorization": f"Bearer {token}",
+            "Authorization": f"Bearer {self._get_oauth_token()}",
             "Content-Type": "application/json",
             "Accept": "application/json",
         }
@@ -61,7 +65,7 @@ class DscoProductClient:
 
         r = requests.get(
             url,
-            headers=self.headers,
+            headers=self._headers(),
             params=params,
             timeout=30,
         )
@@ -73,7 +77,7 @@ class DscoProductClient:
 
         r = requests.post(
             url,
-            headers=self.headers,
+            headers=self._headers(),
             json=payload,
             timeout=60,
         )
@@ -94,12 +98,11 @@ class DscoProductClient:
     ) -> Dict:
         """
         GET /catalog
-        item_key: dscoItemId | sku | partnerSku | upc | ean | mpn | isbn | gtin
+        item_key: sku | partnerSku | upc | ean | mpn | gtin | dscoItemId
         """
 
         params: Dict[str, Union[str, bool]] = {
-            "itemKey": item_key,
-            "value": value,
+            item_key: value,
         }
 
         if return_multiple:
@@ -119,10 +122,10 @@ class DscoProductClient:
     def update_catalog_small_batch(self, items: List[Dict]) -> Dict:
         """
         POST /catalog/batch/small
-        items debe ser una lista de objetos ItemCatalog
         """
 
         if not isinstance(items, list) or not items:
             raise ValueError("items must be a non-empty list")
 
         return self._post("/catalog/batch/small", items)
+

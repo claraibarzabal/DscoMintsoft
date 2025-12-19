@@ -1,128 +1,96 @@
-import os
-import requests
-from typing import List, Dict, Optional, Union
 from dotenv import load_dotenv
+import json
+from datetime import datetime, timedelta, timezone
 
-load_dotenv()
+from clients.dsco_order_client import DscoOrderClient
+from clients.dsco_product_client import DscoProductClient
+from loggers.product_logger import get_product_logger
 
 
-class DscoProductClient:
-    """
-    Cliente DSCO – Catalog / Products API
-    Autenticación OAuth2 (client_credentials)
-    """
+def main():
+    load_dotenv()
 
-    BASE_URL = "https://api.dsco.io"
-    AUTH_URL = "https://auth.dsco.io/oauth/token"
+    logger = get_product_logger()
+    logger.info("===== DSCO CATALOG TEST FROM ORDER START =====")
 
-    def __init__(self):
-        self.client_id = os.getenv("DSCO_CLIENT_ID")
-        self.client_secret = os.getenv("DSCO_CLIENT_SECRET")
-
-        if not self.client_id or not self.client_secret:
-            raise RuntimeError("Missing DSCO_CLIENT_ID or DSCO_CLIENT_SECRET")
-
-        self._access_token: Optional[str] = None
-        self.headers = self._build_headers()
+    order_client = DscoOrderClient()
+    product_client = DscoProductClient()
 
     # -------------------------------------------------
-    # OAuth
+    # Fechas requeridas por DSCO /order/page
     # -------------------------------------------------
-    def _get_oauth_token(self) -> str:
-        """Obtiene access_token usando client_credentials"""
+    orders_updated_since = "2024-01-01T00:00:00Z"
 
-        if self._access_token:
-            return self._access_token
-
-        r = requests.post(
-            self.AUTH_URL,
-            auth=(self.client_id, self.client_secret),
-            data={"grant_type": "client_credentials"},
-            timeout=30,
-        )
-        r.raise_for_status()
-
-        self._access_token = r.json()["access_token"]
-        return self._access_token
-
-    def _build_headers(self) -> Dict[str, str]:
-        token = self._get_oauth_token()
-        return {
-            "Authorization": f"Bearer {token}",
-            "Content-Type": "application/json",
-            "Accept": "application/json",
-        }
+    until = (
+        datetime.now(timezone.utc) - timedelta(seconds=10)
+    ).isoformat(timespec="seconds").replace("+00:00", "Z")
 
     # -------------------------------------------------
-    # Low level requests
+    # 1️⃣ Traer UNA orden
     # -------------------------------------------------
-    def _get(self, path: str, params: Optional[Dict] = None) -> Dict:
-        url = f"{self.BASE_URL}{path}"
+    orders_page = order_client.get_orders_page(
+        orders_updated_since=orders_updated_since,
+        until=until,
+        orders_per_page=1,
+        include_test_orders=True,
+    )
 
-        r = requests.get(
-            url,
-            headers=self.headers,
-            params=params,
-            timeout=30,
-        )
-        r.raise_for_status()
-        return r.json()
+    logger.debug("Raw orders_page response:")
+    logger.debug(json.dumps(orders_page, indent=2))
 
-    def _post(self, path: str, payload: Union[Dict, List[Dict]]) -> Dict:
-        url = f"{self.BASE_URL}{path}"
+    orders = orders_page.get("orders") or []
 
-        r = requests.post(
-            url,
-            headers=self.headers,
-            json=payload,
-            timeout=60,
-        )
-        r.raise_for_status()
-        return r.json()
+    if not orders:
+        logger.warning("No orders found in response")
+        return
+
+    order = orders[0]
+    order_number = order.get("consumerOrderNumber")
+
+    logger.info(f"Order number: {order_number}")
 
     # -------------------------------------------------
-    # Catalog – single item lookup
+    # 2️⃣ Obtener el primer SKU
     # -------------------------------------------------
-    def get_catalog_item(
-        self,
-        *,
-        item_key: str,
-        value: str,
-        dsco_retailer_id: Optional[str] = None,
-        dsco_trading_partner_id: Optional[str] = None,
-        return_multiple: bool = False,
-    ) -> Dict:
-        """
-        GET /catalog
-        item_key: dscoItemId | sku | partnerSku | upc | ean | mpn | isbn | gtin
-        """
+    order_lines = order.get("orderLines") or []
 
-        params: Dict[str, Union[str, bool]] = {
-            "itemKey": item_key,
-            "value": value,
-        }
+    if not order_lines:
+        logger.warning("Order has no orderLines")
+        logger.info(json.dumps(order, indent=2))
+        return
 
-        if return_multiple:
-            params["returnMultiple"] = True
+    line = order_lines[0]
 
-        if dsco_retailer_id:
-            params["dscoRetailerId"] = dsco_retailer_id
+    sku = (
+        line.get("sku")
+        or line.get("partnerSku")
+        or line.get("item", {}).get("sku")
+    )
 
-        if dsco_trading_partner_id:
-            params["dscoTradingPartnerId"] = dsco_trading_partner_id
+    if not sku:
+        logger.warning("No SKU found in order line")
+        logger.info(json.dumps(line, indent=2))
+        return
 
-        return self._get("/catalog", params=params)
+    logger.info(f"Using SKU: {sku}")
 
     # -------------------------------------------------
-    # Catalog – update small batch
+    # 3️⃣ Buscar el producto en catálogo
     # -------------------------------------------------
-    def update_catalog_small_batch(self, items: List[Dict]) -> Dict:
-        """
-        POST /catalog/batch/small
-        items debe ser una lista de objetos ItemCatalog
-        """
+    catalog_item = product_client.get_catalog_item(
+        item_key="sku",
+        value=sku,
+    )
 
-        if not isinstance(items, list) or not items:
-            raise ValueError("items must be a non-empty list")
+    if not catalog_item:
+        logger.warning("Catalog item not found for SKU")
+        return
 
-        return self._post("/catalog/batch/small", items)
+    logger.info("===== CATALOG ITEM =====")
+    logger.info(json.dumps(catalog_item, indent=2))
+
+    logger.info("===== DSCO CATALOG TEST FROM ORDER END =====")
+
+
+if __name__ == "__main__":
+    main()
