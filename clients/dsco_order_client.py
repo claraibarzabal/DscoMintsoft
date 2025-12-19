@@ -1,8 +1,9 @@
 import os
-import time
 import requests
-from typing import Dict, Optional
+from typing import Dict, Optional, List
 from dotenv import load_dotenv
+import time
+
 
 load_dotenv()
 
@@ -13,8 +14,8 @@ class DscoOrderClient:
     OAuth2 client_credentials
     """
 
-    BASE_URL = "https://api.dsco.io"
-    AUTH_URL = "https://auth.dsco.io/oauth/token"
+    AUTH_URL = "https://api.dsco.io/api/v3/oauth2/token"
+    BASE_URL = "https://api.dsco.io/api/v3"
 
     def __init__(self):
         self.client_id = os.getenv("DSCO_CLIENT_ID")
@@ -24,17 +25,20 @@ class DscoOrderClient:
             raise RuntimeError("Missing DSCO_CLIENT_ID or DSCO_CLIENT_SECRET")
 
         self._access_token: Optional[str] = None
-        self._token_expiry: float = 0
 
     # -------------------------------------------------
     # OAuth
     # -------------------------------------------------
     def _get_access_token(self) -> str:
-        if self._access_token and time.time() < self._token_expiry:
+        if self._access_token and self._token_expiry and time.time() < self._token_expiry:
             return self._access_token
 
         response = requests.post(
             self.AUTH_URL,
+            headers={
+                "Content-Type": "application/x-www-form-urlencoded",
+                "Accept": "application/json",
+            },
             data={
                 "grant_type": "client_credentials",
                 "client_id": self.client_id,
@@ -43,19 +47,24 @@ class DscoOrderClient:
             timeout=30,
         )
 
-        response.raise_for_status()
-        data = response.json()
+        if not response.ok:
+            raise RuntimeError(
+                f"OAuth failed {response.status_code}: {response.text}"
+            )
 
+        data = response.json()
         self._access_token = data["access_token"]
         self._token_expiry = time.time() + data.get("expires_in", 3600) - 60
 
         return self._access_token
 
+
+
     def _headers(self) -> Dict[str, str]:
         return {
             "Authorization": f"Bearer {self._get_access_token()}",
-            "Content-Type": "application/json",
             "Accept": "application/json",
+            "Content-Type": "application/json",
         }
 
     # -------------------------------------------------
@@ -73,36 +82,58 @@ class DscoOrderClient:
         r.raise_for_status()
         return r.json()
 
+    # ------------------------------------------------
+    # Get single order
+    # -----------------------------------------------
+    def get_order(
+        self,
+        *,
+        order_key: str,
+        value: str,
+        dsco_account_id: Optional[str] = None,
+        dsco_trading_partner_id: Optional[str] = None,
+        return_multiple: bool = False,
+    ) -> Dict:
+        params = {
+            "orderKey": order_key,
+            "value": value,
+        }
+
+        if return_multiple:
+            params["returnMultiple"] = True
+
+        if dsco_account_id:
+            params["dscoAccountId"] = dsco_account_id
+
+        if dsco_trading_partner_id:
+            params["dscoTradingPartnerId"] = dsco_trading_partner_id
+
+        return self._get("/order/", params)
+
     # -------------------------------------------------
     # Orders – paginated
     # -------------------------------------------------
     def get_orders_page(
         self,
         *,
-        orders_updated_since: str,
-        until: str,
-        orders_per_page: int = 1000,
-        include_test_orders: bool = False,
+        orders_updated_since: str = None,
+        until: str = None,
+        orders_per_page: int = 100,
         scroll_id: Optional[str] = None,
     ) -> Dict:
-        """
-        GET /order/page
-        """
-
         params = {}
 
         if scroll_id:
             params["scrollId"] = scroll_id
         else:
+            if not orders_updated_since or not until:
+                raise ValueError("Must provide orders_updated_since and until for first page")
+
             params["ordersUpdatedSince"] = orders_updated_since
             params["until"] = until
             params["ordersPerPage"] = orders_per_page
 
-        if include_test_orders:
-            params["includeTestOrders"] = True
-
         return self._get("/order/page", params)
-
 
     # -------------------------------------------------
     # Orders – all (auto scroll)
@@ -112,7 +143,6 @@ class DscoOrderClient:
         *,
         orders_updated_since: str,
         until: str,
-        status: Optional[List[str]] = None,
     ) -> List[Dict]:
         """
         Descarga todas las órdenes usando scrollId
@@ -125,7 +155,6 @@ class DscoOrderClient:
             data = self.get_orders_page(
                 orders_updated_since=orders_updated_since,
                 until=until,
-                status=status,
                 scroll_id=scroll_id,
             )
 

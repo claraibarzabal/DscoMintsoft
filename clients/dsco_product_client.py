@@ -13,8 +13,9 @@ class DscoProductClient:
     Autenticación OAuth2 (client_credentials)
     """
 
-    BASE_URL = "https://api.dsco.io"
-    TOKEN_URL = "https://api.dsco.io/oauth/token"
+    BASE_URL = "https://api.dsco.io/api/v3"
+    TOKEN_URL = "https://api.dsco.io/api/v3/oauth2/token"
+
 
     def __init__(self):
         self.client_id = os.getenv("DSCO_CLIENT_ID")

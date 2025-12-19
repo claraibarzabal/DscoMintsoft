@@ -19,20 +19,21 @@ def main():
     # -------------------------------------------------
     # Fechas requeridas por DSCO /order/page
     # -------------------------------------------------
-    orders_updated_since = "2024-01-01T00:00:00Z"
 
-    until = (
-        datetime.now(timezone.utc) - timedelta(seconds=10)
-    ).isoformat(timespec="seconds").replace("+00:00", "Z")
+    orders_updated_since = "2024-01-01T00:00:00Z"
+    until = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
 
     # -------------------------------------------------
     # 1️⃣ Traer UNA orden
     # -------------------------------------------------
+    orders_updated_since = "2024-01-01T00:00:00Z"
+    until = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
     orders_page = order_client.get_orders_page(
         orders_updated_since=orders_updated_since,
         until=until,
         orders_per_page=1,
-        include_test_orders=True,
     )
 
     logger.debug("Raw orders_page response:")
